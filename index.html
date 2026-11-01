@@ -1336,11 +1336,11 @@
   });
 
   let clearAccountResolve = null;
-  function showClearAccountDialog(message){
+  function showClearAccountDialog(message, defaultClient){
     return new Promise(resolve=>{
       clearAccountResolve = resolve;
       document.getElementById('clearaccount-message').textContent = message;
-      document.getElementById('clearaccount-client').value = '';
+      document.getElementById('clearaccount-client').value = defaultClient || '';
       document.getElementById('clearaccount-overlay').classList.add('active');
     });
   }
@@ -2357,6 +2357,7 @@
         activeAccountId = t.accounts[0].id;
       } else {
         acc.order = [];
+        acc.label = 'Cuenta 1';
       }
       recomputeTableStatus(t);
       await saveTables();
@@ -2365,14 +2366,16 @@
     }
     const label = accountDisplayName(t, acc);
     const confirmMsg = `¿Deseas vaciar ${label}? El consumo (${money(total)}) quedará registrado como cuenta pendiente de cobro.`;
-    const result = await showClearAccountDialog(confirmMsg);
+    // Si la cuenta tiene nombre propio (ej. "Carlos"): la mesa se registra como "Mesa 3" y el nombre pasa a ser el cliente
+    const isNamedAcc = !/^Cuenta \d+$/.test(acc.label || '');
+    const result = await showClearAccountDialog(confirmMsg, isNamedAcc ? acc.label : '');
     if(!result.confirmed) return;
 
     pendingAccounts.push({
       id: uid(),
       date: new Date().toLocaleDateString('es-GT',{day:'2-digit',month:'2-digit',year:'numeric'}),
       ts: Date.now(),
-      tableName: label,
+      tableName: isNamedAcc ? t.name : label,
       clientName: result.clientName || '',
       total,
       items: acc.order.map(i=>({productId:i.productId, name:i.name, qty:i.qty, price:i.price, mode:i.mode||'normal'})),
@@ -2383,6 +2386,7 @@
       activeAccountId = t.accounts[0].id;
     } else {
       acc.order = [];
+      acc.label = 'Cuenta 1'; // la cuenta queda libre: el siguiente cliente no hereda el nombre
     }
     recomputeTableStatus(t);
     await Promise.all([saveTables(), savePendingAccounts()]);
@@ -2424,6 +2428,7 @@
       activeAccountId = t.accounts[0].id;
     } else {
       acc.order = [];
+      acc.label = 'Cuenta 1'; // la cuenta queda libre: el siguiente cliente no hereda el nombre
     }
     recomputeTableStatus(t);
     await Promise.all([saveTables(), saveSales()]);
@@ -3793,7 +3798,7 @@
             ts: Date.now(),
             time: new Date().toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit'}),
             tableId: null,
-            tableName: 'Cobro pendiente — ' + acc.tableName,
+            tableName: 'Cobro pendiente — ' + acc.tableName + (acc.clientName ? ' (' + acc.clientName + ')' : ''),
             items: (acc.items||[]).map(i=>({name:i.name, qty:i.qty, price:i.price, mode:i.mode||'normal'})),
             total: acc.total,
             paymentMethod: payment.method,
